@@ -41,26 +41,28 @@
     }
 
     const loginForm = $('loginForm');
-    const setupForm = $('setupForm');
 
     const hasUsers = typeof window.auth.hasUsers === 'function'
       ? window.auth.hasUsers()
       : (window.auth.getUsers().length > 0);
 
-    // إذا ماكو مستخدمين: نعرض إعداد أول مرة
     if (!hasUsers) {
-      if (loginForm) loginForm.style.display = 'none';
-      if (setupForm) setupForm.style.display = 'block';
-      $('suUsername')?.focus();
-    } else {
-      if (loginForm) loginForm.style.display = 'block';
-      if (setupForm) setupForm.style.display = 'none';
-      $('loginUsername')?.focus();
+      setMessage('لا يوجد مستخدمين مضبوطين على هذا الجهاز. يرجى إضافة مستخدم من النسخة/الجهاز الذي تم إعداد الدخول عليه.');
     }
+
+    $('loginUsername')?.focus();
 
     loginForm?.addEventListener('submit', (e) => {
       e.preventDefault();
       setMessage('');
+
+      const hasUsersNow = typeof window.auth.hasUsers === 'function'
+        ? window.auth.hasUsers()
+        : (window.auth.getUsers().length > 0);
+      if (!hasUsersNow) {
+        setMessage('لا يمكن تسجيل الدخول لأنه لا يوجد مستخدمين مضبوطين على هذا الجهاز.');
+        return;
+      }
 
       const username = $('loginUsername')?.value || '';
       const password = $('loginPassword')?.value || '';
@@ -72,31 +74,6 @@
         return;
       }
 
-      redirectAfterLogin();
-    });
-
-    setupForm?.addEventListener('submit', (e) => {
-      e.preventDefault();
-      setMessage('');
-
-      const username = $('suUsername')?.value || '';
-      const password = $('suPassword')?.value || '';
-      const confirmPassword = $('suConfirm')?.value || '';
-
-      const result = window.auth.createFirstUser({ username, password, confirmPassword });
-      if (!result.ok) {
-        setMessage(result.error || 'تعذر إنشاء المستخدم.');
-        return;
-      }
-
-      // بعد الإنشاء، نسجل دخول مباشرة ونحوّل
-      const loginResult = window.auth.login({ username, password, remember: true });
-      if (!loginResult.ok) {
-        setMessage('تم إنشاء المستخدم، لكن تعذر تسجيل الدخول. حاول تسجيل الدخول يدوياً.');
-        if (loginForm) loginForm.style.display = 'block';
-        if (setupForm) setupForm.style.display = 'none';
-        return;
-      }
       redirectAfterLogin();
     });
 
