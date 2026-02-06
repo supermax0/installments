@@ -28,8 +28,12 @@ function initFirebase() {
       measurementId: "G-5R1J8BQS0X"
     };
 
-    // Initialize Firebase
-    firebase.initializeApp(firebaseConfig);
+    // Initialize Firebase (avoid double init)
+    if (firebase.apps && firebase.apps.length > 0) {
+      // already initialized
+    } else {
+      firebase.initializeApp(firebaseConfig);
+    }
     
     // Initialize Firestore
     db = firebase.firestore();
@@ -202,6 +206,37 @@ async function saveSettingsFirestore(settings) {
     return true;
   } catch (error) {
     console.error("Error saving settings:", error);
+    return false;
+  }
+}
+
+// ========== App Data (Single Document) ==========
+/**
+ * قراءة كل بيانات التطبيق كوثيقة واحدة (Firestore)
+ * تسهل المزامنة بين المتصفحات بدون تعديل كبير على app.js
+ */
+async function getAppDataFirestore() {
+  if (!firebaseReady) return null;
+  try {
+    const docSnap = await db.collection("appData").doc("app").get();
+    if (!docSnap.exists) return null;
+    return docSnap.data();
+  } catch (error) {
+    console.error("Error getting app data:", error);
+    return null;
+  }
+}
+
+/**
+ * حفظ كل بيانات التطبيق كوثيقة واحدة (Firestore)
+ */
+async function setAppDataFirestore(data) {
+  if (!firebaseReady) return false;
+  try {
+    await db.collection("appData").doc("app").set(data);
+    return true;
+  } catch (error) {
+    console.error("Error saving app data:", error);
     return false;
   }
 }
@@ -425,6 +460,8 @@ window.firebaseDB = {
   saveSettingsFirestore,
   subscribeToCustomersFirestore,
   subscribeToSalesFirestore,
+  getAppDataFirestore,
+  setAppDataFirestore,
   
   // Realtime Database
   getCustomersRealtime,

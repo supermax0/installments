@@ -7,8 +7,205 @@ const STORAGE_KEYS = {
   customers: 'installments_customers',
   sales: 'installments_sales',
   activity: 'installments_activity',
-  settings: 'installments_settings'
+  settings: 'installments_settings',
+  externalDebts: 'installments_external_debts',
+  externalDebtTypes: 'installments_external_debt_types'
 };
+
+// ========== Cloud Sync (Firebase) ==========
+const CLOUD_SYNC_KEYS = {
+  localUpdatedAt: 'installments_cloud_updatedAt'
+};
+
+let cloudSyncStarted = false;
+let cloudSyncApplying = false;
+let cloudPushTimer = null;
+let cloudPullTimer = null;
+
+function getLocalUpdatedAt() {
+  const n = Number(localStorage.getItem(CLOUD_SYNC_KEYS.localUpdatedAt) || 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function setLocalUpdatedAt(ts) {
+  const n = Number(ts || 0);
+  localStorage.setItem(CLOUD_SYNC_KEYS.localUpdatedAt, String(Number.isFinite(n) ? n : 0));
+}
+
+function touchLocalUpdatedAt() {
+  setLocalUpdatedAt(Date.now());
+}
+
+function canUseCloudSync() {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.firebaseDB !== 'undefined' &&
+    typeof window.firebaseDB.ready === 'function' &&
+    window.firebaseDB.ready() &&
+    typeof window.firebaseDB.getAppDataFirestore === 'function' &&
+    typeof window.firebaseDB.setAppDataFirestore === 'function'
+  );
+}
+
+function collectLocalAppData() {
+  return {
+    customers: getCustomers(),
+    sales: getSales(),
+    activity: getActivity(),
+    settings: getSettings(),
+    externalDebts: getExternalDebts(),
+    externalDebtTypes: getExternalDebtTypes()
+  };
+}
+
+function rerenderAfterCloudSync() {
+  try {
+    fillSaleCustomerSelect();
+    renderDashboard();
+    renderCustomers();
+    renderSalesList('', 'all');
+    renderExternalDebts();
+    renderActivity();
+    renderLateList();
+    updateLateBadge();
+    renderUpcomingInstallments();
+    renderSettings();
+    updateDataInfo();
+    updateBrowserInfo();
+  } catch (e) {
+    console.warn('Cloud sync rerender failed', e);
+  }
+}
+
+async function pushToCloudNow(reason = '') {
+  if (!canUseCloudSync()) return false;
+  if (cloudSyncApplying) return false;
+  try {
+    const payload = collectLocalAppData();
+    const updatedAt = Date.now();
+    const ok = await window.firebaseDB.setAppDataFirestore({
+      ...payload,
+      updatedAt,
+      reason
+    });
+    if (ok) {
+      setLocalUpdatedAt(updatedAt);
+    }
+    return ok;
+  } catch (e) {
+    console.warn('Cloud push failed', e);
+    return false;
+  }
+}
+
+function scheduleCloudPush(reason = '') {
+  if (!canUseCloudSync()) return;
+  if (cloudSyncApplying) return;
+  clearTimeout(cloudPushTimer);
+  cloudPushTimer = setTimeout(() => {
+    pushToCloudNow(reason);
+  }, 800);
+}
+
+async function pullFromCloudIfNewer() {
+  if (!canUseCloudSync()) return;
+  if (cloudSyncApplying) return;
+  try {
+    const remote = await window.firebaseDB.getAppDataFirestore();
+    if (!remote || typeof remote !== 'object') return;
+
+    const remoteAt = Number(remote.updatedAt || 0);
+    const localAt = getLocalUpdatedAt();
+
+    const remoteHasAny =
+      (Array.isArray(remote.customers) && remote.customers.length > 0) ||
+      (Array.isArray(remote.sales) && remote.sales.length > 0) ||
+      (Array.isArray(remote.activity) && remote.activity.length > 0) ||
+      (Array.isArray(remote.externalDebts) && remote.externalDebts.length > 0) ||
+      (remote.settings && typeof remote.settings === 'object');
+
+    // إذا ما عندنا timestamp محلي والريموت عنده بيانات، نسحب
+    const shouldPull =
+      (remoteAt > 0 && remoteAt > localAt) ||
+      (localAt === 0 && remoteHasAny);
+
+    if (!shouldPull) return;
+
+    cloudSyncApplying = true;
+    if (Array.isArray(remote.customers)) setCustomers(remote.customers);
+    if (Array.isArray(remote.sales)) setSales(remote.sales);
+    if (Array.isArray(remote.activity)) setActivity(remote.activity);
+    if (Array.isArray(remote.externalDebts)) setExternalDebts(remote.externalDebts);
+    if (Array.isArray(remote.externalDebtTypes)) setExternalDebtTypes(remote.externalDebtTypes);
+    if (remote.settings && typeof remote.settings === 'object') setSettings(remote.settings);
+    setLocalUpdatedAt(remoteAt || Date.now());
+    cloudSyncApplying = false;
+
+    rerenderAfterCloudSync();
+    toast('تمت المزامنة بين المتصفحات', 'success');
+  } catch (e) {
+    cloudSyncApplying = false;
+    console.warn('Cloud pull failed', e);
+  }
+}
+
+async function initialCloudSync() {
+  if (!canUseCloudSync()) return;
+  try {
+    const remote = await window.firebaseDB.getAppDataFirestore();
+    const local = collectLocalAppData();
+    const localAt = getLocalUpdatedAt();
+    const remoteAt = Number(remote?.updatedAt || 0);
+
+    const localHasAny =
+      (local.customers && local.customers.length > 0) ||
+      (local.sales && local.sales.length > 0) ||
+      (local.activity && local.activity.length > 0) ||
+      (local.externalDebts && local.externalDebts.length > 0);
+
+    const remoteHasAny =
+      (remote && Array.isArray(remote.customers) && remote.customers.length > 0) ||
+      (remote && Array.isArray(remote.sales) && remote.sales.length > 0) ||
+      (remote && Array.isArray(remote.activity) && remote.activity.length > 0) ||
+      (remote && Array.isArray(remote.externalDebts) && remote.externalDebts.length > 0);
+
+    if (remote && (remoteAt > localAt || (localAt === 0 && remoteHasAny && !localHasAny))) {
+      // اسحب من السحابة
+      await pullFromCloudIfNewer();
+      return;
+    }
+
+    if (localHasAny && (!remote || remoteAt < localAt || !remoteHasAny)) {
+      // ادفع المحلي للسحابة
+      await pushToCloudNow('initial');
+      toast('تم ربط المزامنة السحابية', 'success');
+    }
+  } catch (e) {
+    console.warn('Initial cloud sync failed', e);
+  }
+}
+
+function startCloudSync() {
+  if (cloudSyncStarted) return;
+  cloudSyncStarted = true;
+
+  // انتظر Firebase يصير جاهز
+  let tries = 0;
+  const wait = setInterval(() => {
+    tries++;
+    if (canUseCloudSync()) {
+      clearInterval(wait);
+      initialCloudSync();
+      clearInterval(cloudPullTimer);
+      cloudPullTimer = setInterval(() => {
+        pullFromCloudIfNewer();
+      }, 12000);
+    }
+    if (tries >= 20) {
+      clearInterval(wait);
+    }
+  }, 500);
+}
 
 // ========== الفلاتر المتقدمة ==========
 let advancedFilters = {
@@ -37,6 +234,7 @@ function initApp() {
   fillSaleCustomerSelect();
   renderCustomers();
   renderSalesList();
+  renderExternalDebts();
   renderActivity();
   renderLateList();
   renderSettings();
@@ -50,6 +248,9 @@ function initApp() {
   
   // تهيئة event listeners بعد التأكد من وجود العناصر
   initEventListeners();
+
+  // تفعيل المزامنة السحابية بين المتصفحات (إن توفر Firebase)
+  startCloudSync();
 }
 
 function initEventListeners() {
@@ -346,6 +547,14 @@ function initEventListeners() {
   safeAddListener('exportData', 'click', exportData);
   safeAddListener('importData', 'click', importData);
   
+  // External Debts
+  safeAddListener('externalDebtForm', 'submit', saveExternalDebt);
+  safeAddListener('addExternalTypeBtn', 'click', addExternalDebtTypeFromUI);
+  safeAddListener('closeExternalDebtPaymentModal', 'click', () => {
+    document.getElementById('externalDebtPaymentModal')?.classList.remove('open');
+  });
+  safeAddListener('externalDebtPaymentForm', 'submit', saveExternalDebtPayment);
+
   // Logout
   safeAddListener('logoutBtn', 'click', () => {
     try {
@@ -363,6 +572,8 @@ function initEventListeners() {
       let totalDebts = 0;
       let lateDebts = 0;
       let activeDebts = 0;
+      let externalDebtsRemaining = 0;
+      let externalDebtsActiveCount = 0;
       
       sales.forEach(s => {
         const remaining = (s.totalAmount || 0) - (s.paidAmount || 0);
@@ -375,6 +586,16 @@ function initEventListeners() {
           }
         }
       });
+
+      const externalDebts = getExternalDebts();
+      externalDebts.forEach(d => {
+        const rem = getExternalDebtRemaining(d);
+        if (rem > 0) {
+          externalDebtsRemaining += rem;
+          externalDebtsActiveCount += 1;
+        }
+      });
+      totalDebts += externalDebtsRemaining;
       
       const modal = document.createElement('div');
       modal.className = 'modal open';
@@ -397,6 +618,10 @@ function initEventListeners() {
               <span class="debt-detail-label">ديون نشطة</span>
               <span class="debt-detail-value">${formatMoney(activeDebts)}</span>
             </div>
+            <div class="debt-detail-item" style="border-right: 3px solid var(--info);">
+              <span class="debt-detail-label">ديون خارجية (متبقي)</span>
+              <span class="debt-detail-value" style="color: var(--info-dark);">${formatMoney(externalDebtsRemaining)}</span>
+            </div>
             <div class="debt-detail-item">
               <span class="debt-detail-label">عدد المبيعات المتأخرة</span>
               <span class="debt-detail-value">${late.length}</span>
@@ -407,6 +632,10 @@ function initEventListeners() {
                 const rem = s.totalAmount - (s.paidAmount || 0);
                 return rem > 0 && !getIsSaleLate(s);
               }).length}</span>
+            </div>
+            <div class="debt-detail-item">
+              <span class="debt-detail-label">عدد الديون الخارجية النشطة</span>
+              <span class="debt-detail-value">${externalDebtsActiveCount}</span>
             </div>
           </div>
         </div>
@@ -461,6 +690,10 @@ function getSettings() {
 
 function setSettings(settings) {
   localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(settings));
+  if (!cloudSyncApplying) {
+    touchLocalUpdatedAt();
+    scheduleCloudPush('settings');
+  }
 }
 
 // ========== توليد ID فريد للبيع ==========
@@ -499,6 +732,10 @@ function getCustomers() {
 
 function setCustomers(arr) {
   localStorage.setItem(STORAGE_KEYS.customers, JSON.stringify(arr));
+  if (!cloudSyncApplying) {
+    touchLocalUpdatedAt();
+    scheduleCloudPush('customers');
+  }
 }
 
 function getSales() {
@@ -512,6 +749,63 @@ function getSales() {
 
 function setSales(arr) {
   localStorage.setItem(STORAGE_KEYS.sales, JSON.stringify(arr));
+  if (!cloudSyncApplying) {
+    touchLocalUpdatedAt();
+    scheduleCloudPush('sales');
+  }
+}
+
+// ========== الديون الخارجية ==========
+function getExternalDebtTypes() {
+  const defaults = ['عام'];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.externalDebtTypes);
+    const arr = raw ? JSON.parse(raw) : null;
+    if (!Array.isArray(arr)) return defaults;
+    const cleaned = arr
+      .map(x => (x || '').toString().trim())
+      .filter(Boolean);
+    return cleaned.length ? Array.from(new Set(cleaned)) : defaults;
+  } catch {
+    return defaults;
+  }
+}
+
+function setExternalDebtTypes(arr) {
+  const cleaned = (Array.isArray(arr) ? arr : [])
+    .map(x => (x || '').toString().trim())
+    .filter(Boolean);
+  const unique = cleaned.length ? Array.from(new Set(cleaned)) : ['عام'];
+  localStorage.setItem(STORAGE_KEYS.externalDebtTypes, JSON.stringify(unique));
+  if (!cloudSyncApplying) {
+    touchLocalUpdatedAt();
+    scheduleCloudPush('externalDebtTypes');
+  }
+}
+
+function getExternalDebts() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.externalDebts);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function setExternalDebts(arr) {
+  localStorage.setItem(STORAGE_KEYS.externalDebts, JSON.stringify(Array.isArray(arr) ? arr : []));
+  if (!cloudSyncApplying) {
+    touchLocalUpdatedAt();
+    scheduleCloudPush('externalDebts');
+  }
+}
+
+function getExternalDebtRemaining(d) {
+  const total = Number(d?.totalAmount || 0);
+  const paid = Number(d?.paidAmount || 0);
+  const rem = total - paid;
+  return rem > 0 ? rem : 0;
 }
 
 function getActivity() {
@@ -520,6 +814,14 @@ function getActivity() {
     return data ? JSON.parse(data) : [];
   } catch {
     return [];
+  }
+}
+
+function setActivity(arr) {
+  localStorage.setItem(STORAGE_KEYS.activity, JSON.stringify(arr));
+  if (!cloudSyncApplying) {
+    touchLocalUpdatedAt();
+    scheduleCloudPush('activity');
   }
 }
 
@@ -534,7 +836,7 @@ function addActivity(type, text, meta = {}) {
   });
   // الاحتفاظ بآخر 500 حركة فقط
   const trimmed = list.slice(0, 500);
-  localStorage.setItem(STORAGE_KEYS.activity, JSON.stringify(trimmed));
+  setActivity(trimmed);
 }
 
 // ========== مساعدات ==========
@@ -547,6 +849,19 @@ function formatDate(iso) {
     hour: '2-digit',
     minute: '2-digit'
   });
+}
+
+function formatDateOnly(value) {
+  if (!value) return '—';
+  const settings = getSettings();
+  const fmt = settings?.dateFormat || 'en-GB';
+
+  let d = new Date(value);
+  if (Number.isNaN(d.getTime()) && typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    d = new Date(value + 'T00:00:00');
+  }
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleDateString(fmt, { year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 
 function formatMoney(n) {
@@ -1411,11 +1726,260 @@ function updateLateBadge() {
   badge.classList.toggle('has-late', count > 0);
 }
 
+// ========== الديون الخارجية (UI) ==========
+function fillExternalDebtTypesSelect() {
+  const select = document.getElementById('externalDebtType');
+  if (!select) return;
+  const current = select.value;
+  const types = getExternalDebtTypes();
+  select.innerHTML = types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  if (current && types.includes(current)) {
+    select.value = current;
+  }
+}
+
+function ensureExternalDebtDateDefault() {
+  const input = document.getElementById('externalDebtDate');
+  if (!input) return;
+  if (!input.value) {
+    input.value = new Date().toISOString().slice(0, 10);
+  }
+}
+
+function renderExternalDebts() {
+  fillExternalDebtTypesSelect();
+  ensureExternalDebtDateDefault();
+
+  const tbody = document.getElementById('externalDebtsTbody');
+  const empty = document.getElementById('externalDebtsEmpty');
+  const summaryEl = document.getElementById('externalDebtsSummary');
+  if (!tbody || !empty) return;
+
+  const list = getExternalDebts()
+    .slice()
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+  let totalRemaining = 0;
+  list.forEach(d => {
+    totalRemaining += getExternalDebtRemaining(d);
+  });
+  if (summaryEl) {
+    summaryEl.textContent = `عدد: ${list.length} · المتبقي: ${formatMoney(totalRemaining)}`;
+  }
+
+  if (list.length === 0) {
+    tbody.innerHTML = '';
+    empty.classList.add('visible');
+    return;
+  }
+
+  empty.classList.remove('visible');
+  tbody.innerHTML = list.map(d => {
+    const debtDate = d.date || d.createdAt || '';
+    const total = Number(d.totalAmount || 0);
+    const paid = Number(d.paidAmount || 0);
+    const remaining = getExternalDebtRemaining(d);
+    const kind = d.kind === 'loan' ? 'سلفة' : 'دين';
+    const kindClass = d.kind === 'loan' ? 'debt-kind-badge--loan' : 'debt-kind-badge--debt';
+    const remainingClass = remaining <= 0 ? 'debt-remaining--zero' : 'debt-remaining--pos';
+    const note = (d.note || '').toString().trim();
+
+    return `
+      <tr data-external-debt-id="${escapeHtml(d.id)}">
+        <td style="white-space: nowrap;">${escapeHtml(formatDateOnly(debtDate))}</td>
+        <td>
+          <strong>${escapeHtml(d.type || 'عام')}</strong>
+          ${note ? `<div class="form-hint" style="margin: 0.2rem 0 0;">${escapeHtml(note)}</div>` : ''}
+        </td>
+        <td><span class="debt-kind-badge ${kindClass}">${kind}</span></td>
+        <td>${formatMoney(total)}</td>
+        <td>${formatMoney(paid)}</td>
+        <td class="debt-remaining ${remainingClass}">${formatMoney(remaining)}</td>
+        <td>
+          ${remaining > 0
+            ? `<button class="btn btn-primary btn-sm btn-pay-external-debt" data-id="${escapeHtml(d.id)}">سداد</button>`
+            : `<span class="badge badge-success">مكتمل</span>`
+          }
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  tbody.querySelectorAll('.btn-pay-external-debt').forEach(btn => {
+    btn.addEventListener('click', () => openExternalDebtPaymentModal(btn.dataset.id));
+  });
+}
+
+function addExternalDebtTypeFromUI() {
+  const input = document.getElementById('externalNewType');
+  if (!input) return;
+  const name = (input.value || '').toString().trim();
+  if (!name) {
+    toast('أدخل اسم النوع', 'error');
+    return;
+  }
+  const types = getExternalDebtTypes();
+  if (types.includes(name)) {
+    toast('هذا النوع موجود مسبقاً', 'warning');
+    input.value = '';
+    return;
+  }
+  setExternalDebtTypes([name, ...types]);
+  input.value = '';
+  fillExternalDebtTypesSelect();
+  const select = document.getElementById('externalDebtType');
+  if (select) select.value = name;
+  toast('تمت إضافة النوع');
+  renderExternalDebts();
+}
+
+function saveExternalDebt(e) {
+  e.preventDefault();
+  const kind = document.querySelector('input[name="externalKind"]:checked')?.value || 'debt';
+  const type = document.getElementById('externalDebtType')?.value || 'عام';
+  const date = (document.getElementById('externalDebtDate')?.value || '').toString().trim();
+  const amount = Number(document.getElementById('externalDebtAmount')?.value || 0);
+  const note = (document.getElementById('externalDebtNote')?.value || '').toString().trim();
+
+  if (!type) {
+    toast('اختر نوع الدين', 'error');
+    return;
+  }
+  if (!date) {
+    toast('اختر التاريخ', 'error');
+    return;
+  }
+  if (!amount || amount < 1) {
+    toast('أدخل مبلغ صحيح', 'error');
+    return;
+  }
+
+  const debt = {
+    id: 'ed_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+    kind: (kind === 'loan') ? 'loan' : 'debt',
+    type,
+    date, // YYYY-MM-DD
+    totalAmount: amount,
+    paidAmount: 0,
+    payments: [],
+    note,
+    createdAt: new Date().toISOString()
+  };
+
+  const list = getExternalDebts();
+  list.unshift(debt);
+  setExternalDebts(list);
+
+  addActivity('debt', `دين خارجي جديد: ${type} (${debt.kind === 'loan' ? 'سلفة' : 'دين'}) - ${formatMoney(amount)}`, { externalDebtId: debt.id });
+  toast('تمت إضافة الدين الخارجي');
+
+  // reset
+  const form = document.getElementById('externalDebtForm');
+  if (form) form.reset();
+  fillExternalDebtTypesSelect();
+  ensureExternalDebtDateDefault();
+
+  renderExternalDebts();
+  renderDashboard();
+}
+
+function openExternalDebtPaymentModal(externalDebtId) {
+  const modal = document.getElementById('externalDebtPaymentModal');
+  const debt = getExternalDebts().find(d => d.id === externalDebtId);
+  if (!modal || !debt) return;
+
+  const remaining = getExternalDebtRemaining(debt);
+  if (remaining <= 0) {
+    toast('هذا الدين مكتمل', 'warning');
+    return;
+  }
+
+  document.getElementById('externalDebtPaymentId').value = externalDebtId;
+  const kind = debt.kind === 'loan' ? 'سلفة' : 'دين';
+
+  const summary = document.getElementById('externalDebtPaymentSummary');
+  if (summary) {
+    summary.innerHTML = `
+      <div class="payment-summary__title">${escapeHtml(debt.type || 'عام')} — ${kind}</div>
+      <div class="payment-summary__row">
+        <span class="payment-summary__label">التاريخ</span>
+        <span class="payment-summary__value">${escapeHtml(formatDateOnly(debt.date || debt.createdAt || ''))}</span>
+      </div>
+      <div class="payment-summary__row">
+        <span class="payment-summary__label">الإجمالي</span>
+        <span class="payment-summary__value">${formatMoney(debt.totalAmount || 0)}</span>
+      </div>
+      <div class="payment-summary__row">
+        <span class="payment-summary__label">المدفوع</span>
+        <span class="payment-summary__value payment-summary__value--paid">${formatMoney(debt.paidAmount || 0)}</span>
+      </div>
+      <div class="payment-summary__row payment-summary__row--highlight">
+        <span class="payment-summary__label">المتبقي</span>
+        <span class="payment-summary__value payment-summary__value--remaining">${formatMoney(remaining)}</span>
+      </div>
+    `;
+  }
+
+  const amountInput = document.getElementById('externalDebtPaymentAmount');
+  if (amountInput) {
+    amountInput.value = '';
+    amountInput.max = remaining;
+    amountInput.placeholder = remaining;
+  }
+  const noteInput = document.getElementById('externalDebtPaymentNote');
+  if (noteInput) noteInput.value = '';
+
+  modal.classList.add('open');
+}
+
+function saveExternalDebtPayment(e) {
+  e.preventDefault();
+  const externalDebtId = document.getElementById('externalDebtPaymentId')?.value;
+  const amount = Number(document.getElementById('externalDebtPaymentAmount')?.value || 0);
+  const note = (document.getElementById('externalDebtPaymentNote')?.value || '').toString().trim();
+  if (!externalDebtId || !amount || amount < 1) {
+    toast('أدخل مبلغ السداد', 'error');
+    return;
+  }
+
+  const list = getExternalDebts();
+  const debt = list.find(d => d.id === externalDebtId);
+  if (!debt) {
+    toast('الدين غير موجود', 'error');
+    return;
+  }
+
+  const remaining = getExternalDebtRemaining(debt);
+  if (amount > remaining) {
+    toast('المبلغ أكبر من المتبقي', 'error');
+    return;
+  }
+
+  const payment = {
+    id: 'edp_' + Date.now().toString(36),
+    amount,
+    note: note || 'سداد',
+    date: new Date().toISOString()
+  };
+  debt.payments = debt.payments || [];
+  debt.payments.push(payment);
+  debt.paidAmount = Number(debt.paidAmount || 0) + amount;
+
+  setExternalDebts(list);
+  addActivity('payment', `سداد دين خارجي: ${formatMoney(amount)} - ${debt.type || 'عام'}`, { externalDebtId });
+  toast('تم تسجيل السداد');
+
+  document.getElementById('externalDebtPaymentModal')?.classList.remove('open');
+  renderExternalDebts();
+  renderDashboard();
+}
+
 // ========== لوحة التحكم ==========
 function renderDashboard() {
   const customers = getCustomers();
   const sales = getSales();
   const late = getLateSales();
+  const externalDebts = getExternalDebts();
   let collected = 0;
   let totalDebts = 0;
   let totalAmount = 0;
@@ -1423,6 +1987,10 @@ function renderDashboard() {
     collected += s.paidAmount || 0;
     totalAmount += s.totalAmount || 0;
     totalDebts += (s.totalAmount || 0) - (s.paidAmount || 0);
+  });
+  // إضافة الديون الخارجية (المتبقي)
+  externalDebts.forEach(d => {
+    totalDebts += getExternalDebtRemaining(d);
   });
   document.getElementById('statCustomers').textContent = new Intl.NumberFormat('en-US').format(customers.length);
   document.getElementById('statSales').textContent = new Intl.NumberFormat('en-US').format(sales.length);
@@ -1522,12 +2090,13 @@ function showPage(pageId) {
   } else if (pageId === 'reports') {
     renderReports(currentReportPeriod);
     renderCharts(currentReportPeriod);
+  } else if (pageId === 'external-debts') {
+    renderExternalDebts();
   } else if (pageId === 'settings') {
     renderSettings();
   } else if (pageId === 'dashboard') {
-    renderUpcomingInstallments();
-  } else if (pageId === 'dashboard') {
     renderDashboard();
+    renderUpcomingInstallments();
   }
 }
 
@@ -1656,9 +2225,17 @@ function showSearchResults(results, query) {
 function exportData() {
   const customers = getCustomers();
   const sales = getSales();
+  const activity = getActivity();
+  const settings = getSettings();
+  const externalDebts = getExternalDebts();
+  const externalDebtTypes = getExternalDebtTypes();
   const data = {
     customers,
     sales,
+    activity,
+    settings,
+    externalDebts,
+    externalDebtTypes,
     exportDate: new Date().toISOString(),
     version: '1.0'
   };
@@ -1688,15 +2265,21 @@ function importData() {
         if (confirm('هل أنت متأكد من استيراد البيانات؟\nسيتم استبدال جميع البيانات الحالية.')) {
           if (data.customers) setCustomers(data.customers);
           if (data.sales) setSales(data.sales);
+          if (data.activity) setActivity(data.activity);
+          if (data.settings) setSettings(data.settings);
+          if (data.externalDebts) setExternalDebts(data.externalDebts);
+          if (data.externalDebtTypes) setExternalDebtTypes(data.externalDebtTypes);
           toast('تم استيراد البيانات بنجاح', 'success');
           fillSaleCustomerSelect();
           renderDashboard();
           const categoryFilter = document.querySelector('[data-customer-filter].active')?.dataset.customerFilter || 'all';
           renderCustomers(document.getElementById('customerSearch')?.value || '', categoryFilter);
           renderSalesList('', 'all');
+          renderExternalDebts();
           renderActivity();
           renderLateList();
           updateLateBadge();
+          renderSettings();
         }
       } catch (error) {
         toast('خطأ في استيراد البيانات. تأكد من صحة الملف.', 'error');
