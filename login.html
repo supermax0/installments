@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>تسجيل الدخول — تتبع الأقساط</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="login.css" />
+</head>
+<body>
+  <main class="auth-layout">
+    <section class="auth-card" aria-labelledby="loginTitle">
+      <div class="auth-head">
+        <div class="auth-logo" aria-hidden="true">📒</div>
+        <div>
+          <h1 class="auth-title" id="loginTitle">تسجيل الدخول</h1>
+          <p class="auth-subtitle">نظام تتبع الديون والأقساط</p>
+        </div>
+      </div>
+
+      <div class="auth-message" id="loginMessage" role="alert" aria-live="polite" style="display:none;"></div>
+
+      <form id="loginForm" class="auth-form">
+        <div class="form-group form-group--with-icon">
+          <label for="loginUsername">اسم المستخدم</label>
+          <div class="input-wrap">
+            <span class="input-wrap__icon" aria-hidden="true">👤</span>
+            <input class="input" id="loginUsername" type="text" autocomplete="username" placeholder="اسم المستخدم" required />
+          </div>
+        </div>
+
+        <div class="form-group form-group--with-icon">
+          <label for="loginPassword">كلمة المرور</label>
+          <div class="input-wrap">
+            <span class="input-wrap__icon" aria-hidden="true">🔒</span>
+            <input class="input" id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••••" required />
+          </div>
+        </div>
+
+        <label class="checkbox-label auth-remember">
+          <input type="checkbox" id="rememberMe" />
+          <span class="checkbox-text">
+            <strong>تذكرني</strong>
+            <small>يبقى الدخول لمدة أطول على هذا الجهاز</small>
+          </span>
+        </label>
+
+        <button class="btn btn-primary btn-block" type="submit">دخول</button>
+      </form>
+
+      <form id="setupForm" class="auth-form" style="display:none;">
+        <div class="form-group">
+          <label for="suUsername">إنشاء اسم مستخدم</label>
+          <input class="input" id="suUsername" type="text" autocomplete="username" placeholder="مثال: المدير" required />
+        </div>
+        <div class="form-group">
+          <label for="suPassword">إنشاء كلمة مرور</label>
+          <input class="input" id="suPassword" type="password" autocomplete="new-password" placeholder="••••••••" required />
+          <small class="form-hint">ملاحظة: هذا حماية بسيطة داخل الجهاز فقط.</small>
+        </div>
+        <div class="form-group">
+          <label for="suConfirm">تأكيد كلمة المرور</label>
+          <input class="input" id="suConfirm" type="password" autocomplete="new-password" placeholder="••••••••" required />
+        </div>
+        <button class="btn btn-primary btn-block" type="submit">حفظ وإنشاء المستخدم</button>
+      </form>
+
+      <details class="auth-details">
+        <summary>تغيير كلمة المرور</summary>
+        <form id="changePasswordForm" class="auth-form auth-form--secondary">
+          <div class="form-group">
+            <label for="cpUsername">اسم المستخدم</label>
+            <input class="input" id="cpUsername" type="text" placeholder="اسم المستخدم" autocomplete="username" required />
+          </div>
+          <div class="form-group">
+            <label for="cpOld">كلمة المرور الحالية</label>
+            <input class="input" id="cpOld" type="password" autocomplete="current-password" required />
+          </div>
+          <div class="form-group">
+            <label for="cpNew">كلمة المرور الجديدة</label>
+            <input class="input" id="cpNew" type="password" autocomplete="new-password" required />
+            <small class="form-hint">ملاحظة: هذا حماية بسيطة داخل الجهاز فقط.</small>
+          </div>
+          <button class="btn btn-secondary btn-block" type="submit">حفظ كلمة المرور</button>
+        </form>
+      </details>
+
+      <p class="auth-footer">
+        <span>©</span> <span id="year"></span> — تتبع الأقساط
+      </p>
+    </section>
+  </main>
+
+  <script src="auth.js"></script>
+  <script src="login.js"></script>
+</body>
+</html>
+

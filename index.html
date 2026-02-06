@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نظام تتبع الديون والأقساط</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app" id="mainApp">
+    <!-- الشريط العلوي -->
+    <header class="header">
+      <button class="menu-btn" id="menuBtn" aria-label="القائمة">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="logo-wrap">
+        <span class="logo-icon" aria-hidden="true">📒</span>
+        <h1 class="logo">تتبع الأقساط</h1>
+      </div>
+      <div class="header-search">
+        <input type="search" id="globalSearch" class="header-search__input" placeholder="بحث سريع..." autocomplete="off">
+        <span class="header-search__icon">🔍</span>
+      </div>
+      <button class="header-logout" id="logoutBtn" title="تسجيل الخروج" aria-label="تسجيل الخروج">⎋</button>
+      <div class="header-badge" id="lateBadge">0 متأخر</div>
+    </header>
+
+    <!-- القائمة الجانبية -->
+    <nav class="sidebar" id="sidebar">
+      <ul class="nav-list">
+        <li><a href="#" class="nav-link active" data-page="dashboard"><span class="nav-icon" aria-hidden="true">📊</span> لوحة التحكم</a></li>
+        <li><a href="#" class="nav-link" data-page="customers"><span class="nav-icon" aria-hidden="true">👥</span> العملاء</a></li>
+        <li><a href="#" class="nav-link" data-page="sales"><span class="nav-icon" aria-hidden="true">➕</span> إضافة بيع</a></li>
+        <li><a href="#" class="nav-link" data-page="sales-list"><span class="nav-icon" aria-hidden="true">📋</span> عرض المبيعات</a></li>
+        <li class="nav-divider" aria-hidden="true"></li>
+        <li><a href="#" class="nav-link" data-page="notifications"><span class="nav-icon" aria-hidden="true">⚠️</span> المتأخرون عن السداد</a></li>
+        <li><a href="#" class="nav-link" data-page="activity"><span class="nav-icon" aria-hidden="true">🔄</span> الحركات والنشاط</a></li>
+        <li class="nav-divider" aria-hidden="true"></li>
+        <li><a href="#" class="nav-link" data-page="reports"><span class="nav-icon" aria-hidden="true">📈</span> التقارير</a></li>
+        <li><a href="#" class="nav-link" data-page="settings"><span class="nav-icon" aria-hidden="true">⚙️</span> الإعدادات</a></li>
+      </ul>
+    </nav>
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- المحتوى الرئيسي -->
+    <main class="main-content">
+      <!-- لوحة التحكم -->
+      <section id="page-dashboard" class="page active">
+        <div class="page-header">
+          <h2>لوحة التحكم</h2>
+          <div class="page-header-actions">
+            <button class="btn btn-secondary" id="exportData" title="تصدير البيانات">
+              <span aria-hidden="true">📥</span> تصدير
+            </button>
+            <button class="btn btn-secondary" id="importData" title="استيراد البيانات">
+              <span aria-hidden="true">📤</span> استيراد
+            </button>
+          </div>
+        </div>
+        <div class="total-debt-card" id="totalDebtCard">
+          <span class="total-debt-card__icon">📊</span>
+          <div class="total-debt-card__content">
+            <span class="total-debt-card__label">مجموع الديون (المتبقي)</span>
+            <span class="total-debt-card__value" id="statTotalDebts">0 د.ع</span>
+          </div>
+          <button class="total-debt-card__info" id="debtInfoBtn" title="تفاصيل الديون">ℹ️</button>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card stat-card--customers">
+            <span class="stat-card__icon">👥</span>
+            <span class="stat-value" id="statCustomers">0</span>
+            <span class="stat-label">العملاء</span>
+          </div>
+          <div class="stat-card stat-card--sales">
+            <span class="stat-card__icon">📋</span>
+            <span class="stat-value" id="statSales">0</span>
+            <span class="stat-label">المبيعات</span>
+          </div>
+          <div class="stat-card stat-card--warning">
+            <span class="stat-card__icon">⚠️</span>
+            <span class="stat-value" id="statLate">0</span>
+            <span class="stat-label">متأخرون</span>
+          </div>
+          <div class="stat-card stat-card--success">
+            <span class="stat-card__icon">💰</span>
+            <span class="stat-value" id="statCollected">0</span>
+            <span class="stat-label">محصّل (د.ع)</span>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card__header">
+            <h3 class="chart-card__title">نسبة التحصيل</h3>
+            <span class="chart-card__percentage" id="chartPercentage">0%</span>
+          </div>
+          <div class="chart-container">
+            <div class="chart-bar">
+              <div class="chart-bar__fill" id="chartPaid" style="width: 0%"></div>
+              <div class="chart-bar__label">
+                <span>المدفوع: <strong id="chartPaidAmount">0 د.ع</strong></span>
+                <span>المتبقي: <strong id="chartRemainingAmount">0 د.ع</strong></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="extra-stats-card" id="extraStats"></div>
+        <div class="upcoming-installments-card" id="upcomingInstallments">
+          <h3 class="upcoming-installments-card__title">📅 الأقساط القادمة (7 أيام)</h3>
+          <div class="upcoming-list" id="upcomingList"></div>
+        </div>
+        <div class="quick-actions-card">
+          <h3 class="quick-actions-card__title">إجراءات سريعة</h3>
+          <div class="quick-actions-grid">
+            <button class="quick-action-btn" onclick="showPage('customers'); document.getElementById('openCustomerForm').click();">
+              <span class="quick-action-btn__icon">➕</span>
+              <span class="quick-action-btn__text">إضافة عميل</span>
+            </button>
+            <button class="quick-action-btn" onclick="showPage('sales')">
+              <span class="quick-action-btn__icon">💰</span>
+              <span class="quick-action-btn__text">إضافة بيع</span>
+            </button>
+            <button class="quick-action-btn" onclick="showPage('notifications')">
+              <span class="quick-action-btn__icon">⚠️</span>
+              <span class="quick-action-btn__text">المتأخرون</span>
+            </button>
+            <button class="quick-action-btn" onclick="exportData()">
+              <span class="quick-action-btn__icon">📥</span>
+              <span class="quick-action-btn__text">تصدير البيانات</span>
+            </button>
+          </div>
+        </div>
+        <div class="welcome-card">
+          <span class="welcome-card__icon">✨</span>
+          <p>مرحباً بك في نظام تتبع الديون والأقساط. استخدم القائمة للتنقل بين الصفحات.</p>
+        </div>
+      </section>
+
+      <!-- صفحة العملاء -->
+      <section id="page-customers" class="page">
+        <div class="page-header">
+          <h2>العملاء</h2>
+          <button class="btn btn-primary" id="openCustomerForm"><span aria-hidden="true">➕</span> إضافة عميل</button>
+        </div>
+        <div class="search-box">
+          <span class="search-box__icon" aria-hidden="true">🔍</span>
+          <input type="search" id="customerSearch" placeholder="بحث بالاسم أو الهاتف..." class="input" autocomplete="off">
+          <button class="search-clear" id="clearCustomerSearch" title="مسح البحث" style="display: none;">✕</button>
+        </div>
+        <div class="filter-tabs">
+          <button class="filter-tab active" data-customer-filter="all">الكل</button>
+          <button class="filter-tab" data-customer-filter="vip">مميز</button>
+          <button class="filter-tab" data-customer-filter="normal">عادي</button>
+          <button class="filter-tab" data-customer-filter="problematic">مشاكل</button>
+        </div>
+        <div class="cards-list" id="customersList"></div>
+      </section>
+
+      <!-- نموذج إضافة/تعديل عميل -->
+      <div class="modal" id="customerModal">
+        <div class="modal-content modal--customer">
+          <div class="modal-header modal-header--customer">
+            <h3><span class="modal-header__icon">👤</span> <span id="customerModalTitle">إضافة عميل</span></h3>
+            <button class="modal-close" id="closeCustomerModal">&times;</button>
+          </div>
+          <form id="customerForm" class="modal-form">
+            <input type="hidden" id="customerId">
+            <div class="form-group form-group--with-icon">
+              <label for="customerName">الاسم الكامل</label>
+              <div class="input-wrap">
+                <span class="input-wrap__icon">📝</span>
+                <input type="text" id="customerName" class="input" required placeholder="اسم العميل">
+              </div>
+            </div>
+            <div class="form-group form-group--with-icon">
+              <label for="customerPhone">رقم الهاتف</label>
+              <div class="input-wrap">
+                <span class="input-wrap__icon">📱</span>
+                <input type="tel" id="customerPhone" class="input" required placeholder="07X XXX XXXX">
+              </div>
+            </div>
+            <div class="form-group form-group--with-icon">
+              <label for="customerAddress">العنوان</label>
+              <div class="input-wrap input-wrap--textarea">
+                <span class="input-wrap__icon">📍</span>
+                <textarea id="customerAddress" class="input" rows="3" placeholder="العنوان التفصيلي"></textarea>
+              </div>
+            </div>
+            <div class="form-group form-group--with-icon">
+              <label for="customerNotes">ملاحظات (اختياري)</label>
+              <div class="input-wrap input-wrap--textarea">
+                <span class="input-wrap__icon">📝</span>
+                <textarea id="customerNotes" class="input" rows="2" placeholder="ملاحظات إضافية عن العميل"></textarea>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="customerCategory">التصنيف</label>
+              <select id="customerCategory" class="input">
+                <option value="normal">عادي</option>
+                <option value="vip">مميز</option>
+                <option value="problematic">مشاكل</option>
+              </select>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block btn--modal">حفظ</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- صفحة إضافة بيع -->
+      <section id="page-sales" class="page">
+        <div class="page-header">
+          <h2>إضافة بيع</h2>
+        </div>
+        <form id="saleForm" class="form-card">
+          <div class="form-group">
+            <label for="saleCustomer">اختيار العميل</label>
+            <select id="saleCustomer" class="input" required>
+              <option value="">-- اختر العميل --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="saleProduct">نوع المنتج</label>
+            <input type="text" id="saleProduct" class="input" required placeholder="مثال: جهاز تلفزيون، أثاث...">
+          </div>
+          <div class="form-group">
+            <label for="saleAmount">المبلغ الإجمالي (دينار عراقي)</label>
+            <input type="number" id="saleAmount" class="input" required min="1" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label for="saleInstallments">عدد الأقساط (اختياري)</label>
+            <input type="number" id="saleInstallments" class="input" min="1" placeholder="مثال: 6">
+            <small class="form-hint">سيتم إنشاء جدول أقساط تلقائياً عند إضافة المبلغ</small>
+          </div>
+          <div class="form-group">
+            <label for="saleInstallmentAmount">مبلغ القسط الشهري (اختياري)</label>
+            <input type="number" id="saleInstallmentAmount" class="input" min="1" placeholder="سيتم حسابه تلقائياً">
+            <small class="form-hint">اتركه فارغاً لحسابه تلقائياً حسب عدد الأقساط</small>
+          </div>
+          <div class="form-group">
+            <label for="saleDueDate">تاريخ أول قسط</label>
+            <input type="date" id="saleDueDate" class="input">
+            <small class="form-hint">تاريخ استحقاق أول قسط</small>
+          </div>
+          <div class="form-group contract-section">
+            <label>عقد البيع (يُحفظ قانونياً)</label>
+            <textarea id="saleContract" class="input contract-text" rows="10" placeholder="سيتم توليد نص العقد تلقائياً عند ملء بيانات البيع...">عقد بيع وشراء بالأقساط
+
+إنه في يوم [التاريخ] الموافق [التاريخ بالإنجليزية]، تم الاتفاق والتراضى بين:
+
+الطرف الأول (البائع): شركة سوبرماكس
+الطرف الثاني (المشتري): [اسم المشتري]
+رقم الهاتف: [رقم الهاتف]
+العنوان: [العنوان]
+
+أولاً: موضوع العقد
+يتعهد الطرف الأول ببيع والطرف الثاني بشراء المنتج التالي: [اسم المنتج]، بموجب الشروط والأحكام المذكورة أدناه.
+
+ثانياً: المبلغ وطريقة الدفع
+- المبلغ الإجمالي: [المبلغ]
+- طريقة الدفع: [طريقة الدفع]
+- عدد الأقساط: [عدد الأقساط] قسط
+- المبلغ المدفوع مقدماً: [المبلغ المدفوع]
+- المبلغ المتبقي: [المبلغ المتبقي]
+
+ثالثاً: التزامات المشتري
+1. يلتزم المشتري بسداد الأقساط في المواعيد المحددة دون تأخير.
+2. في حالة التأخر عن سداد أي قسط لأكثر من [عدد الأيام] يوماً من تاريخ الاستحقاق، يحق للبائع:
+   - المطالبة بسداد المبلغ المتبقي كاملاً دفعة واحدة
+   - إضافة فوائد تأخيرية بنسبة 2% شهرياً على المبلغ المتأخر
+   - اتخاذ الإجراءات القانونية اللازمة لاسترداد الحقوق بما في ذلك رفع الدعوى القضائية
+
+رابعاً: التزامات البائع
+1. يلتزم البائع بتسليم المنتج المتفق عليه بالشروط والمواصفات المذكورة.
+2. يلتزم البائع بحفظ جميع البيانات والمستندات المتعلقة بهذا العقد.
+3. يلتزم البائع بتسجيل جميع المدفوعات والأقساط في النظام الإلكتروني.
+
+خامساً: أحكام عامة
+1. هذا العقد ملزم قانونياً للطرفين ويمكن الاحتجاج به أمام الجهات القضائية المختصة.
+2. جميع البيانات المذكورة في هذا العقد صحيحة ومسجلة في النظام الإلكتروني.
+3. أي تعديل على هذا العقد يجب أن يكون كتابياً وموثقاً من الطرفين.
+4. في حالة النزاع، يتم اللجوء إلى القضاء المختص في [المحافظة/المدينة].
+5. يعتبر هذا العقد ساري المفعول من تاريخ التوقيع ويبقى نافذاً حتى سداد جميع المبالغ المستحقة.
+
+سادساً: التوقيع
+أقر الطرفان بقراءة وفهم جميع بنود هذا العقد والموافقة عليها، وتم التوقيع الإلكتروني والتسجيل في النظام بتاريخ [التاريخ].
+
+ملاحظة: هذا العقد محفوظ إلكترونياً ويمكن طباعته والاحتجاج به قانونياً. جميع البيانات مسجلة في النظام ويمكن الرجوع إليها في أي وقت.</textarea>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">تسجيل البيع وحفظ العقد</button>
+        </form>
+      </section>
+
+      <!-- نافذة تعديل بيع -->
+      <div class="modal" id="editSaleModal">
+        <div class="modal-content modal--customer">
+          <div class="modal-header modal-header--customer">
+            <h3><span class="modal-header__icon">✏️</span> <span id="editSaleModalTitle">تعديل بيع</span></h3>
+            <button class="modal-close" id="closeEditSaleModal">&times;</button>
+          </div>
+          <form id="editSaleForm" class="modal-form">
+            <input type="hidden" id="editSaleId">
+            <div class="form-group form-group--with-icon">
+              <label for="editSaleProduct">نوع المنتج</label>
+              <div class="input-wrap">
+                <span class="input-wrap__icon">📦</span>
+                <input type="text" id="editSaleProduct" class="input" required placeholder="نوع المنتج">
+              </div>
+            </div>
+            <div class="form-group form-group--with-icon">
+              <label for="editSaleAmount">المبلغ الإجمالي (دينار عراقي)</label>
+              <div class="input-wrap">
+                <span class="input-wrap__icon">💰</span>
+                <input type="number" id="editSaleAmount" class="input" required min="1" placeholder="0">
+              </div>
+            </div>
+            <div class="form-group form-group--with-icon">
+              <label for="editSaleContract">نص العقد</label>
+              <div class="input-wrap input-wrap--textarea">
+                <span class="input-wrap__icon">📜</span>
+                <textarea id="editSaleContract" class="input" rows="4" placeholder="نص العقد"></textarea>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block btn--modal">حفظ التعديلات</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- صفحة عرض المبيعات -->
+      <section id="page-sales-list" class="page">
+        <div class="page-header">
+          <h2>عرض المبيعات</h2>
+        </div>
+        <div class="search-box">
+          <span class="search-box__icon" aria-hidden="true">🔍</span>
+          <input type="search" id="salesSearch" placeholder="بحث بالعميل أو المنتج..." class="input" autocomplete="off">
+          <button class="search-clear" id="clearSalesSearch" title="مسح البحث" style="display: none;">✕</button>
+        </div>
+        <div class="filter-tabs">
+          <button class="filter-tab active" data-filter="all">الكل</button>
+          <button class="filter-tab" data-filter="active">نشطة</button>
+          <button class="filter-tab" data-filter="completed">مكتملة</button>
+          <button class="filter-tab" data-filter="late">متأخرة</button>
+        </div>
+        <div class="advanced-filters">
+          <div class="filter-group">
+            <label for="filterDateFrom">من تاريخ:</label>
+            <input type="date" id="filterDateFrom" class="input input-sm">
+          </div>
+          <div class="filter-group">
+            <label for="filterDateTo">إلى تاريخ:</label>
+            <input type="date" id="filterDateTo" class="input input-sm">
+          </div>
+          <div class="filter-group">
+            <label for="filterAmountMin">الحد الأدنى:</label>
+            <input type="number" id="filterAmountMin" class="input input-sm" placeholder="0">
+          </div>
+          <div class="filter-group">
+            <label for="filterAmountMax">الحد الأقصى:</label>
+            <input type="number" id="filterAmountMax" class="input input-sm" placeholder="0">
+          </div>
+          <button class="btn btn-secondary btn-sm" id="applyFilters">تطبيق</button>
+          <button class="btn btn-secondary btn-sm" id="clearFilters">مسح</button>
+        </div>
+        <div class="cards-list" id="salesList"></div>
+      </section>
+
+      <!-- modal إضافة قسط -->
+      <div class="modal" id="paymentModal">
+        <div class="modal-content modal--payment">
+          <div class="modal-header modal-header--payment">
+            <h3><span class="modal-header__icon">💵</span> إضافة دفع قسط</h3>
+            <button class="modal-close" id="closePaymentModal">&times;</button>
+          </div>
+          <form id="paymentForm" class="modal-form">
+            <input type="hidden" id="paymentSaleId">
+            <div class="payment-summary" id="paymentSummary"></div>
+            <div class="form-group form-group--with-icon">
+              <label for="paymentAmount">مبلغ الدفع (د.ع)</label>
+              <div class="input-wrap">
+                <span class="input-wrap__icon">💰</span>
+                <input type="number" id="paymentAmount" class="input" required min="1" placeholder="0">
+              </div>
+            </div>
+            <div class="form-group form-group--with-icon">
+              <label for="paymentNote">ملاحظة (اختياري)</label>
+              <div class="input-wrap">
+                <span class="input-wrap__icon">📌</span>
+                <input type="text" id="paymentNote" class="input" placeholder="مثال: قسط رقم 2">
+              </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-block btn--modal">تسجيل الدفع</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- modal عرض تفاصيل بيع + العقد -->
+      <div class="modal" id="saleDetailModal">
+        <div class="modal-content modal-wide modal--sale-detail">
+          <div class="modal-header modal-header--sale-detail">
+            <h3><span class="modal-header__icon">📄</span> تفاصيل البيع والعقد</h3>
+            <div class="modal-header-actions">
+              <button class="btn btn-secondary btn-sm" id="printContract" title="طباعة العقد">
+                <span aria-hidden="true">🖨️</span> طباعة
+              </button>
+              <button class="btn btn-secondary btn-sm" id="exportSalePDF" title="تصدير PDF">
+                <span aria-hidden="true">📄</span> PDF
+              </button>
+              <button class="modal-close" id="closeSaleDetailModal">&times;</button>
+            </div>
+          </div>
+          <div id="saleDetailContent"></div>
+        </div>
+      </div>
+
+      <!-- صفحة المتأخرين عن السداد -->
+      <section id="page-notifications" class="page">
+        <div class="page-header">
+          <h2>المتأخرون عن السداد</h2>
+        </div>
+        <p class="section-desc">العملاء الذين تأخروا عن موعد السداد أو لم يسددوا أي قسط.</p>
+        <div class="cards-list" id="lateList"></div>
+        <div class="empty-state" id="lateEmpty">لا يوجد متأخرون حالياً.</div>
+      </section>
+
+      <!-- صفحة الحركات والنشاط -->
+      <section id="page-activity" class="page">
+        <div class="page-header">
+          <h2>الحركات والنشاط</h2>
+        </div>
+        <div class="activity-filters">
+          <button class="filter-btn active" data-filter="all">الكل</button>
+          <button class="filter-btn" data-filter="sale">مبيعات</button>
+          <button class="filter-btn" data-filter="payment">مدفوعات</button>
+          <button class="filter-btn" data-filter="customer">عملاء</button>
+        </div>
+        <div class="activity-list" id="activityList"></div>
+      </section>
+
+      <!-- صفحة التقارير -->
+      <section id="page-reports" class="page">
+        <div class="page-header">
+          <h2>التقارير</h2>
+          <div class="report-period-selector">
+            <button class="period-btn active" data-period="month">هذا الشهر</button>
+            <button class="period-btn" data-period="year">هذا العام</button>
+            <button class="period-btn" data-period="all">الكل</button>
+          </div>
+        </div>
+        <div class="reports-grid">
+          <div class="report-card report-card--large">
+            <span class="report-card__icon">📅</span>
+            <h3 class="report-card__title" id="reportPeriodTitle">تقرير هذا الشهر</h3>
+            <div class="report-card__content" id="monthlyReport"></div>
+          </div>
+          <div class="report-card">
+            <span class="report-card__icon">📊</span>
+            <h3 class="report-card__title">أفضل العملاء</h3>
+            <div class="report-card__content" id="topCustomersReport"></div>
+          </div>
+          <div class="report-card">
+            <span class="report-card__icon">💰</span>
+            <h3 class="report-card__title">ملخص المدفوعات</h3>
+            <div class="report-card__content" id="paymentsReport"></div>
+          </div>
+          <div class="report-card">
+            <span class="report-card__icon">📈</span>
+            <h3 class="report-card__title">إحصائيات المبيعات</h3>
+            <div class="report-card__content" id="salesStatsReport"></div>
+          </div>
+          <div class="report-card report-card--chart">
+            <span class="report-card__icon">📊</span>
+            <h3 class="report-card__title">رسم بياني للمبيعات الشهرية</h3>
+            <div class="report-card__content">
+              <canvas id="salesChart" width="400" height="200"></canvas>
+            </div>
+          </div>
+          <div class="report-card report-card--chart">
+            <span class="report-card__icon">💵</span>
+            <h3 class="report-card__title">رسم بياني للمدفوعات</h3>
+            <div class="report-card__content">
+              <canvas id="paymentsChart" width="400" height="200"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- صفحة الإعدادات -->
+      <section id="page-settings" class="page">
+        <div class="page-header">
+          <h2>الإعدادات</h2>
+        </div>
+        
+        <!-- إعدادات عامة -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <h3 class="settings-card__title">⚙️ الإعدادات العامة</h3>
+            <p class="settings-card__desc">إعدادات أساسية للتطبيق</p>
+          </div>
+          <form id="settingsForm" class="settings-form">
+            <div class="form-group">
+              <label for="lateDays">عدد أيام التأخر عن السداد</label>
+              <input type="number" id="lateDays" class="input" min="1" max="365" value="30" required>
+              <small class="form-hint">عدد الأيام بعد آخر قسط لاعتبار البيع متأخراً (1-365 يوم)</small>
+            </div>
+            
+            <div class="settings-divider"></div>
+            
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="notifyOnLate" checked>
+                <span class="checkbox-text">
+                  <strong>إشعار عند وجود متأخرين</strong>
+                  <small>عرض إشعار عند فتح الموقع إذا كان هناك عملاء متأخرين</small>
+                </span>
+              </label>
+            </div>
+            
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="darkMode">
+                <span class="checkbox-text">
+                  <strong>الوضع الليلي (Dark Mode)</strong>
+                  <small>تفعيل الوضع الداكن للواجهة</small>
+                </span>
+              </label>
+            </div>
+            
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="autoSave">
+                <span class="checkbox-text">
+                  <strong>حفظ تلقائي</strong>
+                  <small>حفظ التغييرات تلقائياً عند إدخال البيانات</small>
+                </span>
+              </label>
+            </div>
+            
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="showNotifications">
+                <span class="checkbox-text">
+                  <strong>إشعارات التذكير</strong>
+                  <small>تذكير دوري كل 5 دقائق للمتأخرين</small>
+                </span>
+              </label>
+            </div>
+            
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="browserNotifications">
+                <span class="checkbox-text">
+                  <strong>إشعارات المتصفح</strong>
+                  <small>عرض إشعارات المتصفح للمتأخرين والأقساط القادمة</small>
+                </span>
+              </label>
+            </div>
+            
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="autoBackup">
+                <span class="checkbox-text">
+                  <strong>نسخ احتياطي تلقائي</strong>
+                  <small>إنشاء نسخة احتياطية تلقائياً كل يوم</small>
+                </span>
+              </label>
+            </div>
+            
+            <button type="submit" class="btn btn-primary btn-block">💾 حفظ الإعدادات</button>
+          </form>
+        </div>
+        
+        <!-- إعدادات العرض -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <h3 class="settings-card__title">🎨 إعدادات العرض</h3>
+            <p class="settings-card__desc">تخصيص مظهر الواجهة</p>
+          </div>
+          <div class="settings-form">
+            <div class="form-group">
+              <label for="itemsPerPage">عدد العناصر في الصفحة</label>
+              <select id="itemsPerPage" class="input">
+                <option value="10">10 عناصر</option>
+                <option value="20" selected>20 عنصر</option>
+                <option value="50">50 عنصر</option>
+                <option value="100">100 عنصر</option>
+              </select>
+              <small class="form-hint">عدد العناصر المعروضة في قوائم العملاء والمبيعات</small>
+            </div>
+            
+            <div class="form-group">
+              <label for="dateFormat">تنسيق التاريخ</label>
+              <select id="dateFormat" class="input">
+                <option value="en-GB" selected>يوم/شهر/سنة (12/02/2026)</option>
+                <option value="ar-SA">هجري (1447/07/26)</option>
+                <option value="en-US">شهر/يوم/سنة (02/12/2026)</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="fontSize">حجم الخط</label>
+              <select id="fontSize" class="input">
+                <option value="small">صغير</option>
+                <option value="medium" selected>متوسط</option>
+                <option value="large">كبير</option>
+              </select>
+              <small class="form-hint">حجم الخط المستخدم في الواجهة</small>
+            </div>
+            
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="compactMode">
+                <span class="checkbox-text">
+                  <strong>الوضع المدمج</strong>
+                  <small>تقليل المسافات لعرض المزيد من المحتوى</small>
+                </span>
+              </label>
+            </div>
+            
+            <button class="btn btn-secondary btn-block" onclick="saveDisplaySettings()">💾 حفظ إعدادات العرض</button>
+          </div>
+        </div>
+        
+        <!-- إدارة البيانات -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <h3 class="settings-card__title">💾 إدارة البيانات</h3>
+            <p class="settings-card__desc">تصدير واستيراد وحذف البيانات</p>
+          </div>
+          <div class="settings-info">
+            <div class="info-item">
+              <span class="info-label">حجم البيانات:</span>
+              <span class="info-value" id="dataSize">0 KB</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">عدد العملاء:</span>
+              <span class="info-value" id="settingsCustomersCount">0</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">عدد المبيعات:</span>
+              <span class="info-value" id="settingsSalesCount">0</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">عدد الحركات:</span>
+              <span class="info-value" id="settingsActivityCount">0</span>
+            </div>
+          </div>
+          <div class="settings-actions">
+            <div class="settings-action-group">
+              <h4 class="action-group-title">📥 التصدير</h4>
+              <div class="action-buttons">
+                <button class="btn btn-secondary btn-action" onclick="exportData()">
+                  <span class="btn-icon">📥</span>
+                  <span class="btn-text">
+                    <strong>تصدير JSON</strong>
+                    <small>جميع البيانات بصيغة JSON</small>
+                  </span>
+                </button>
+                <button class="btn btn-secondary btn-action" onclick="exportToCSV()">
+                  <span class="btn-icon">📊</span>
+                  <span class="btn-text">
+                    <strong>تصدير Excel</strong>
+                    <small>ملف CSV للعملاء والمبيعات</small>
+                  </span>
+                </button>
+              </div>
+            </div>
+            
+            <div class="settings-action-group">
+              <h4 class="action-group-title">📤 الاستيراد</h4>
+              <div class="action-buttons">
+                <button class="btn btn-secondary btn-action" onclick="importData()">
+                  <span class="btn-icon">📤</span>
+                  <span class="btn-text">
+                    <strong>استيراد البيانات</strong>
+                    <small>استيراد ملف JSON</small>
+                  </span>
+                </button>
+              </div>
+            </div>
+            
+            <div class="settings-action-group">
+              <h4 class="action-group-title">🗑️ النسخ الاحتياطي</h4>
+              <div class="action-buttons">
+                <button class="btn btn-info btn-action" onclick="viewBackups()">
+                  <span class="btn-icon">📋</span>
+                  <span class="btn-text">
+                    <strong>عرض النسخ الاحتياطية</strong>
+                    <small>عرض النسخ الاحتياطية التلقائية</small>
+                  </span>
+                </button>
+                <button class="btn btn-info btn-action" onclick="createManualBackup()">
+                  <span class="btn-icon">💾</span>
+                  <span class="btn-text">
+                    <strong>إنشاء نسخة احتياطية</strong>
+                    <small>نسخة احتياطية يدوية</small>
+                  </span>
+                </button>
+              </div>
+            </div>
+            
+            <div class="settings-action-group settings-action-group--danger">
+              <h4 class="action-group-title">⚠️ خطر</h4>
+              <div class="action-buttons">
+                <button class="btn btn-danger btn-action" onclick="clearAllData()">
+                  <span class="btn-icon">🗑️</span>
+                  <span class="btn-text">
+                    <strong>حذف جميع البيانات</strong>
+                    <small>لا يمكن التراجع عن هذا الإجراء</small>
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- إعدادات متقدمة -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <h3 class="settings-card__title">🔧 إعدادات متقدمة</h3>
+            <p class="settings-card__desc">إعدادات متقدمة للمستخدمين المحترفين</p>
+          </div>
+          <div class="settings-form">
+            <div class="form-group">
+              <label for="notificationInterval">فترة التذكير (بالدقائق)</label>
+              <input type="number" id="notificationInterval" class="input" min="1" max="60" value="5">
+              <small class="form-hint">عدد الدقائق بين كل تذكير للمتأخرين (1-60 دقيقة)</small>
+            </div>
+            
+            <div class="form-group">
+              <label for="backupRetention">عدد النسخ الاحتياطية المحفوظة</label>
+              <input type="number" id="backupRetention" class="input" min="1" max="30" value="7">
+              <small class="form-hint">عدد النسخ الاحتياطية التلقائية المحفوظة (1-30)</small>
+            </div>
+            
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="enableAnimations" checked>
+                <span class="checkbox-text">
+                  <strong>تفعيل الحركات</strong>
+                  <small>عرض الحركات والانتقالات في الواجهة</small>
+                </span>
+              </label>
+            </div>
+            
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="showTooltips">
+                <span class="checkbox-text">
+                  <strong>عرض التلميحات</strong>
+                  <small>عرض تلميحات عند التمرير على العناصر</small>
+                </span>
+              </label>
+            </div>
+            
+            <button class="btn btn-secondary btn-block" onclick="saveAdvancedSettings()">💾 حفظ الإعدادات المتقدمة</button>
+          </div>
+        </div>
+        
+        <!-- معلومات النظام -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <h3 class="settings-card__title">ℹ️ معلومات النظام</h3>
+            <p class="settings-card__desc">معلومات عن النظام والمتصفح</p>
+          </div>
+          <div class="settings-info">
+            <div class="info-item">
+              <span class="info-label">الإصدار:</span>
+              <span class="info-value">1.0</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">تاريخ آخر تحديث:</span>
+              <span class="info-value">2026-02-04</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">المتصفح:</span>
+              <span class="info-value" id="browserInfo">—</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">دعم LocalStorage:</span>
+              <span class="info-value" id="storageSupport">—</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Toast للإشعارات -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics-compat.js"></script>
+  
+  <!-- Firebase Initialization -->
+  <script src="firebase-init.js"></script>
+  
+  <!-- Auth (Login/Logout) -->
+  <script src="auth.js"></script>
+  
+  <script src="app.js"></script>
+</body>
+</html>
